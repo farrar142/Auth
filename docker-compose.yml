@@ -1,0 +1,23 @@
+version: '3.7'
+
+services:
+  django:
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://172.17.0.1:${CONTAINER_PORT}']
+      interval: 10m
+      retries: 30
+      start_period: 60s
+    build:
+      dockerfile: docker/dev/dockerfile
+      context: .
+    container_name: ${CONTAINER_NAME}
+    entrypoint: tail -f /dev/null
+    volumes:
+      - .:/usr/src/app
+    ports:
+      - ${CONTAINER_PORT}:8000
+    restart: unless-stopped
+    # cpus: .10
+    # mem_limit: "1.5G"
+    environment:
+      TZ: 'Asia/Seoul'
