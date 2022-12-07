@@ -4,6 +4,7 @@ pillow
 django-ninja
 django-cors-headers
 requests
+django-extensions
 
 django-redis
 django-celery-results
