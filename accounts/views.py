@@ -8,10 +8,12 @@ from typing import Tuple, Iterable, TypedDict, Optional
 import requests
 import pytz
 from django.core.files.uploadedfile import UploadedFile
-from django.db import transaction, IntegrityError
-from django.http import HttpResponse
+from django.db import transaction, IntegrityError, models
+from django.http import HttpResponse, HttpRequest
 from django.contrib.auth.models import AnonymousUser
 from django.utils.crypto import get_random_string
+from ninja import NinjaAPI, Schema, Field, errors
+from ninja.renderers import BaseRenderer
 from rest_framework import viewsets, permissions, status, generics, exceptions
 from rest_framework.decorators import (
     api_view,
@@ -53,7 +55,24 @@ from .utils import (
 )
 
 
+class MyRenderer(BaseRenderer):
+    media_type = "application/json"
+
+    def render(self, request, data, *, response_status):
+        return json.dumps(data)
+
+
+ninja = NinjaAPI(urls_namespace="auth", csrf=False)
+
+
 class TPInfo(TypedDict):
+    id: str
+    name: str
+    profile_image_url: str
+    is_id_email: bool
+
+
+class TPInfoSchema(Schema):
     id: str
     name: str
     profile_image_url: str
@@ -73,24 +92,41 @@ class UserViewSet(viewsets.ModelViewSet):
         return serializer_classes.get(method, serializer_classes.get("__default__"))
 
 
-@api_view(["POST"])
-@authentication_classes([])
-def authenticate_by_email(request: MockRequest):
-    form = AuthenticateByEmailForm(data=request.data)
-    if not form.is_valid():
-        return Response(form.errors, status=status.HTTP_400_BAD_REQUEST)
+class EmailLoginSchema(Schema):
+    email: str
+    password: str
 
-    data = form.cleaned_data
+
+class TokenResponse(Schema):
+    refresh: str
+    access: str
+    status: str
+
+
+# @api_view(["POST"])
+# @authentication_classes([])
+@ninja.post("token", response=TokenResponse)
+def authenticate_by_email(request, form: EmailLoginSchema):
+    email_form = AuthenticateByEmailForm(data=form.dict())
+    if not email_form.is_valid():
+        raise exceptions.AuthenticationFailed(detail=email_form.errors)
+
+    data = email_form.cleaned_data
 
     user = User.objects.filter(email=data["email"]).first()
     if not user:
         raise exceptions.AuthenticationFailed
     refresh_token = RefreshToken.for_user(user)
     claim_token = CustomJWTAuthentication.append_token_claims(refresh_token, user)
-    return Response(claim_token)
+    return claim_token
 
 
-def _process_thirdparty(request: Request):
+class AuthenticateByTPSchema(Schema):
+    type: str
+    token: str
+
+
+def _process_thirdparty(form: AuthenticateByTPSchema):
     def process_facebook(access_token: str):
         response = fb_get_self(access_token)
         profile_image_url = (
@@ -132,7 +168,6 @@ def _process_thirdparty(request: Request):
         )
 
     def process_google(access_token: str):
-        print(f"{access_token=}")
         response = google_get_self(access_token)
         return TPInfo(
             **{
@@ -143,11 +178,7 @@ def _process_thirdparty(request: Request):
             }
         )
 
-    if request.method != "POST":
-        raise Exception("Method not allowed")
-
-    body = json.loads(request.body.decode("utf-8"))
-    auth_request_form = AuthenticateByTPForm(data=body)
+    auth_request_form = AuthenticateByTPForm(form.dict())
     if not auth_request_form.is_valid():
         # TODO: throw custom exception
         raise Exception("form validation failed")
@@ -171,11 +202,11 @@ def _process_thirdparty(request: Request):
     return type, token, tp_info
 
 
-@api_view(["POST"])
-@authentication_classes([])
-def authenticate_by_thirdparty(request: Request):
-    (type, token, tp_info) = _process_thirdparty(request)
-    print(_process_thirdparty(request))
+# @api_view(["POST"])
+# @authentication_classes([])
+@ninja.post("signup/thirdparty", response=TPInfoSchema)
+def authenticate_by_thirdparty(request, form: AuthenticateByTPSchema):
+    (type, token, tp_info) = _process_thirdparty(form)
 
     tp_integration: Optional[
         ThirdPartyIntegration
@@ -188,17 +219,33 @@ def authenticate_by_thirdparty(request: Request):
     claim_token = CustomJWTAuthentication.append_token_claims(
         refresh_token, tp_integration.user
     )
-    return Response(claim_token)
+    return claim_token
 
 
-@api_view(["POST"])
-@authentication_classes([])
-def signup_by_email(request: MockRequest):
-    form = SignupByEmailForm(data=request.data)
-    if not form.is_valid():
-        return Response(form.errors, status=status.HTTP_400_BAD_REQUEST)
+class SimpleResponseSchema(Schema):
+    is_success: bool
 
-    data = form.cleaned_data
+
+class SignUpByEmailSchema(Schema):
+    email: str
+    password: str
+    nickname: str
+
+
+# @api_view(["POST"])
+# @authentication_classes([])
+@ninja.post("signup/email/", response={201: SimpleResponseSchema})
+def signup_by_email(request, form: SignUpByEmailSchema):
+    signup_form = SignupByEmailForm(data=form.dict())
+    if not signup_form.is_valid():
+        raise errors.AuthenticationError
+    already = User.objects.filter(
+        models.Q(username=form.nickname) | models.Q(email=form.email)
+    )
+    if already.exists():
+        raise errors.AuthenticationError
+
+    data = signup_form.cleaned_data
     new_user = User(
         username=data["email"],
         email=data["email"],
@@ -209,28 +256,21 @@ def signup_by_email(request: MockRequest):
     try:
         with transaction.atomic():
             new_user.save()
-            # IntervalActivity.create_default_activity(new_user)
-            # IntervalActivity.create_default_activity(new_user)
-    except IntegrityError:
-        # TODO: custom exception class 만들고, 이를 던지면 글로벌 핸들러가 잡아서 처리해주는건 어떨까?
-        # eg) raise APIException(message='사용자가 이미 존재합니다')
-        #     => HTTP 400 / body: {"is_success": true, "reason": "사용자가 이미 존재합니다"}
-        #     ... 같은 식으로
-        return Response(status=status.HTTP_400_BAD_REQUEST)
+    except:
+        raise
 
-    return Response({"is_success": True}, status=status.HTTP_201_CREATED)
+    return 201, {"is_success": True}
 
 
-@api_view(["POST"])
-@authentication_classes([])
-def signup_by_thirdparty(request: Request):
+@ninja.post("signup/thirdparty", response=SimpleResponseSchema)
+def signup_by_thirdparty(request, form: AuthenticateByTPSchema):
     def get_dummy_email(type: str, tp_user_id: str):
         return f"{tp_user_id}@{type}.com"
 
-    def extract_username_from_email(email: str) -> str:
+    def extract_username_from_email(email: str):
         return email.split("@")[0]
 
-    (type, token, tp_info) = _process_thirdparty(request)
+    (type, token, tp_info) = _process_thirdparty(form)
     email = (
         tp_info["id"]
         if tp_info["is_id_email"]
@@ -246,7 +286,7 @@ def signup_by_thirdparty(request: Request):
     if ThirdPartyIntegration.objects.filter(
         type__exact=type, identifier__exact=tp_info["id"]
     ).exists():
-        return Response(status=status.HTTP_401_UNAUTHORIZED)
+        raise errors.AuthenticationError
 
     new_user = User(
         username=username, email=email, nickname=nickname, bio="", is_verified=True
@@ -259,24 +299,14 @@ def signup_by_thirdparty(request: Request):
 
     tp_integration.user = new_user
 
-    # if tp_info["profile_image_url"] is not None:
-    #     try:
-    #         response = requests.get(tp_info["profile_image_url"])
-    #         image_stream = BytesIO(response.content)
-    #         new_user.set_profile_image_bytestream(image_stream)
-    #     except Exception as e:
-    #         print(e)
-
     try:
         with transaction.atomic():
             new_user.save()
-            # IntervalActivity.create_default_activity(new_user)
-            # IntervalActivity.create_default_activity(new_user)
             tp_integration.save()
     except IntegrityError:
-        return Response(status=status.HTTP_400_BAD_REQUEST)
+        raise errors.AuthenticationError
 
-    return Response({"is_success": True})
+    return {"is_success": True}
 
 
 @api_view(["POST"])
@@ -293,18 +323,3 @@ def verification_by_email(request: Request):
         return Response(status=status.HTTP_200_OK)
     else:
         return Response(status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def verification_token(request: MockRequest):
-    user = request.user
-    if isinstance(user, AnonymousUser):
-        raise exceptions.AuthenticationFailed
-    print(request.data)
-    if user.verify_token == request.data["token"]:
-        user.is_verified = True
-        user.save()
-        return Response({"is_success": True})
-    else:
-        return Response({"is_success": False})
