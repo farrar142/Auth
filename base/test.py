@@ -21,6 +21,9 @@ def request_wrapper(func: Callable[..., Any]):
 
 
 class Client(APIClient):
+    def login_with_token(self, token: str):
+        self.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+
     def login(self, user):
         token = str(RefreshToken.for_user(user).access_token)
         self.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")

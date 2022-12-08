@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 from rest_framework import status
+from accounts.schemas import TokenResponse
 from base.test import TestCase
 
 load_dotenv()
@@ -20,5 +21,12 @@ class TestUserCreate(TestCase):
         resp = self.client.get("/users/")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         resp = self.client.post("/auth/token", {"email": EMAIL, "password": PASSWORD})
+        token = TokenResponse(**resp.json())
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.client.login_with_token(token.access)
+        resp = self.client.post("/auth/ping", {"token": token.access})
+        print(resp.json())
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        resp = self.client.post("/auth/parse")
         print(resp.json())
         self.assertEqual(resp.status_code, status.HTTP_200_OK)

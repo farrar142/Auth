@@ -1,57 +1,40 @@
 import datetime
 import json
 import logging
-
 from io import BytesIO
-from typing import Tuple, Iterable, TypedDict, Optional
+from typing import Iterable, Optional, Tuple, TypedDict
 
-import requests
 import pytz
-from django.core.files.uploadedfile import UploadedFile
-from django.db import transaction, IntegrityError, models
-from django.http import HttpResponse, HttpRequest
+import requests
 from django.contrib.auth.models import AnonymousUser
+from django.core.files.uploadedfile import UploadedFile
+from django.db import IntegrityError, models, transaction
+from django.http import HttpRequest, HttpResponse
 from django.utils.crypto import get_random_string
-from ninja import NinjaAPI, Schema, Field, errors
+from ninja import NinjaAPI, Schema, errors
 from ninja.renderers import BaseRenderer
-from rest_framework import viewsets, permissions, status, generics, exceptions
-from rest_framework.decorators import (
-    api_view,
-    authentication_classes,
-    permission_classes,
-    action,
-)
+from rest_framework import exceptions, generics, permissions, status, viewsets
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+
 from accounts.serializers import UserReadOnlySerializer, UserUpsertSerializer
-from base.authentications import CustomJWTAuthentication
-
+from base.authentications import AuthBearer, CustomJWTAuthentication
 from common_module.utils import MockRequest
-
-from .models import (
-    User,
-    ThirdPartyIntegration,
-    Relationship,
-    Block,
-)
-from .forms import (
-    AuthenticateByEmailForm,
-    SignupByEmailForm,
-    AuthenticateByTPForm,
-    B64ProfileImageUploadForm,
-)
-
+from .schemas import *
+from .forms import AuthenticateByEmailForm, AuthenticateByTPForm, SignupByEmailForm
+from .models import ThirdPartyIntegration, User
 from .utils import (
-    fb_get_self,
-    kakao_get_self,
     apple_get_self,
-    kakao_get_self_profile,
+    fb_get_self,
     google_get_self,
-    send_verify_mail,
+    kakao_get_self,
+    kakao_get_self_profile,
     send_password_mail,
+    send_verify_mail,
 )
 
 
@@ -65,20 +48,6 @@ class MyRenderer(BaseRenderer):
 ninja = NinjaAPI(urls_namespace="auth", csrf=False)
 
 
-class TPInfo(TypedDict):
-    id: str
-    name: str
-    profile_image_url: str
-    is_id_email: bool
-
-
-class TPInfoSchema(Schema):
-    id: str
-    name: str
-    profile_image_url: str
-    is_id_email: bool
-
-
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
 
@@ -90,17 +59,6 @@ class UserViewSet(viewsets.ModelViewSet):
         method = self.request.method or "GET"
 
         return serializer_classes.get(method, serializer_classes.get("__default__"))
-
-
-class EmailLoginSchema(Schema):
-    email: str
-    password: str
-
-
-class TokenResponse(Schema):
-    refresh: str
-    access: str
-    status: str
 
 
 # @api_view(["POST"])
@@ -222,16 +180,6 @@ def authenticate_by_thirdparty(request, form: AuthenticateByTPSchema):
     return claim_token
 
 
-class SimpleResponseSchema(Schema):
-    is_success: bool
-
-
-class SignUpByEmailSchema(Schema):
-    email: str
-    password: str
-    nickname: str
-
-
 # @api_view(["POST"])
 # @authentication_classes([])
 @ninja.post("signup/email/", response={201: SimpleResponseSchema})
@@ -323,3 +271,8 @@ def verification_by_email(request: Request):
         return Response(status=status.HTTP_200_OK)
     else:
         return Response(status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@ninja.post("/parse", auth=AuthBearer())
+def parse_token(request):
+    return request.auth

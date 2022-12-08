@@ -28,14 +28,14 @@ router = routers.DefaultRouter()
 router.register("users", UserViewSet)
 
 urlpatterns = [
-    path("auth/", ninja.urls),
+    path("auth/token/refresh", TokenRefreshView.as_view(), name="token_refresh"),
+    path("auth/ping", TokenVerifyView.as_view(), name="token_ping"),
+    path("auth/", ninja.urls),# type: ignore 
     # path("auth/signup/email/", signup_by_email),
     # path("auth/signup/thirdparty", signup_by_thirdparty),
     # path("auth/verify/email", verification_by_email),
     # path("auth/verify", verification_token),
     # path("auth/token", authenticate_by_email, name="token_obtain_pair"),
     # path("auth/token/thirdparty", authenticate_by_thirdparty),
-    # path("auth/token/refresh", TokenRefreshView.as_view(), name="token_refresh"),
-    # path("auth/ping", TokenVerifyView.as_view(), name="token_ping"),
     path("", include(router.urls)),
 ]

@@ -1,7 +1,7 @@
 version: '3.7'
 
 services:
-  django:
+  dev:
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://172.17.0.1:${CONTAINER_PORT}']
       interval: 10m
