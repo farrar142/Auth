@@ -12,7 +12,7 @@ RUN apk update \
     && apk add jpeg-dev zlib-dev libjpeg
 COPY . .
 
-RUN pip3 install -r requirements.txt
+RUN pip3 install -r common_module/requirements.txt
 RUN pip3 install -U black
 RUN apk del build-deps
 
