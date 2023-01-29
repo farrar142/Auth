@@ -37,3 +37,30 @@ services:
     # mem_limit: "1.5G"
     environment:
       TZ: 'Asia/Seoul'
+  celery:
+    build:
+      dockerfile: docker/deploy/dockerfile
+      context: .
+    entrypoint: 'sh docker/celery.sh ${CONTAINER_NAME}'
+    container_name: ${CONTAINER_NAME}_celery
+    hostname: root
+    volumes:
+      - /var/run/celery:/var/run
+      # - /home/ubuntu/nginx/data/${CONTAINER_NAME}:/tmp/uwsgi
+    restart: unless-stopped
+    working_dir: /usr/src/app
+    environment:
+      TZ: 'Asia/Seoul'
+  redis:
+    image: redis:latest
+    command: redis-server --port 6379 --appendonly yes
+    container_name: ${CONTAINER_NAME}_redis
+    hostname: root
+    labels:
+      - 'name=redis'
+      - 'mode=standalone'
+    ports:
+      - '${REDIS_PORT}:6379'
+    restart: unless-stopped
+    environment:
+      TZ: 'Asia/Seoul'
