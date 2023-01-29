@@ -64,12 +64,17 @@ class CustomJWTAuthentication(JWTAuthentication):
         # return self.get_user(validated_token), validated_token
 
     @classmethod
-    def append_token_claims(cls, refresh_token: RefreshToken, user: User):
+    def append_token_claims(
+        cls, refresh_token: RefreshToken, user: Optional[User] = None
+    ):
         secret_key = settings.SECRET_KEY
         decode_jwt = jwt.decode(
             str(refresh_token.access_token), secret_key, algorithms=["HS256"]
         )
         decode_jwt["role"] = []
+        user_id = decode_jwt["user_id"]
+        if not user:
+            user = User.objects.get(id=user_id)
         # add payload here!!
         if user.is_staff or user.is_superuser:
             decode_jwt["role"].append("staff")
