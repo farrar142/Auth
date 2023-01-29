@@ -162,36 +162,12 @@ def send_verify_mail(to, username, verify_number):
         "메일 인증 번호는 <strong>"
         + verify_number
         + "</strong> 입니다.<br/>"
-        + "이 인증을 요청하지 않았다면 이 이메일을 무시하셔도 됩니다.<br/><br/>"
-        "팀 마이페이서",
+        + "이 인증을 요청하지 않았다면 이 이메일을 무시하셔도 됩니다.<br/><br/>",
         "html",
     )
     message["to"] = to
-    message["from"] = "support@palzakpalzak.com"
-    message["subject"] = "[마이페이서] 메일 인증 번호 입니다."
-    raw_message_no_attachment = base64.urlsafe_b64encode(message.as_bytes())
-    raw_message_no_attachment = raw_message_no_attachment.decode()
-    body = {"raw": raw_message_no_attachment}
-
-    try:
-        service.users().messages().send(userId="me", body=body).execute()
-        return True
-    except Exception as e:
-        print(e)
-        return False
-
-
-def send_password_mail(to, username, password):
-    service = get_credentials()
-    message = MIMEText(
-        username + "님, 안녕하세요.<br/>"
-        "재발급 된 비밀번호는 <strong>" + password + "</strong> 입니다.<br/><br/>"
-        "팀 마이페이서",
-        "html",
-    )
-    message["to"] = to
-    message["from"] = "support@palzakpalzak.com"
-    message["subject"] = "[마이페이서] 새 비밀번호를 발송해드립니다."
+    message["from"] = "gksdjf1690@gmail.com"
+    message["subject"] = "블로그 메일 인증 번호 입니다."
     raw_message_no_attachment = base64.urlsafe_b64encode(message.as_bytes())
     raw_message_no_attachment = raw_message_no_attachment.decode()
     body = {"raw": raw_message_no_attachment}
@@ -211,3 +187,11 @@ def refresh_thirdparty_verify():
         user = User.objects.get(id=third_user.user.pk)
         user.is_verified = True
         user.save()
+
+
+def get_random_nums(length: int = 4):
+    import random
+
+    return [
+        random.choice(list(map(lambda x: str(x), range(10)))) for x in range(length)
+    ]

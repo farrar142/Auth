@@ -24,3 +24,11 @@ class ProfileImageUploadForm(forms.Form):
 
 class B64ProfileImageUploadForm(forms.Form):
     image = forms.CharField(required=True)
+
+
+class EmailVerifyForm(forms.Form):
+    code = forms.CharField(required=True)
+
+
+class RefreshTokenForm(forms.Form):
+    refresh = forms.CharField(required=True)

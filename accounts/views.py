@@ -4,8 +4,7 @@ import logging
 from io import BytesIO
 from typing import Iterable, Optional, Tuple, TypedDict
 
-import pytz
-import requests
+import uuid
 from django.contrib.auth.models import AnonymousUser
 from django.core.files.uploadedfile import UploadedFile
 from django.db import IntegrityError, models, transaction
@@ -25,7 +24,13 @@ from accounts.serializers import UserReadOnlySerializer, UserUpsertSerializer
 from base.authentications import AuthBearer, CustomJWTAuthentication
 from common_module.utils import MockRequest
 from .schemas import *
-from .forms import AuthenticateByEmailForm, AuthenticateByTPForm, SignupByEmailForm
+from .forms import (
+    AuthenticateByEmailForm,
+    AuthenticateByTPForm,
+    SignupByEmailForm,
+    EmailVerifyForm,
+    RefreshTokenForm,
+)
 from .models import ThirdPartyIntegration, User
 from .utils import (
     apple_get_self,
@@ -33,9 +38,10 @@ from .utils import (
     google_get_self,
     kakao_get_self,
     kakao_get_self_profile,
-    send_password_mail,
     send_verify_mail,
+    get_random_nums,
 )
+from .verify_storages import EmailVerifyStorage
 
 
 class MyRenderer(BaseRenderer):
@@ -276,3 +282,61 @@ def verification_by_email(request: Request):
 @ninja.post("/parse", auth=AuthBearer())
 def parse_token(request):
     return request.auth
+
+
+def email_login(request: MockRequest):
+    form = AuthenticateByEmailForm(request.data)
+    if not form.is_valid():
+        return Response(form.errors, status=status.HTTP_400_BAD_REQUEST)
+    data = form.cleaned_data
+    email = data["email"]
+    username = email.split("@")[0] + "#" + "".join(get_random_nums())
+    user = (
+        User.objects.annotate(tp=models.F("tp_integrations"))
+        .filter(email=email, tp__isnull=True)
+        .first()
+    )
+    if not user:
+        user = User(email=email, username=username, nickname=username)
+        user.set_password(str(uuid.uuid4()))
+        with transaction.atomic():
+            user.save()
+    storage = EmailVerifyStorage()
+    if storage.get_email_term(user):
+        raise exceptions.ValidationError(
+            detail={"email": ["이메일을 발신한 지 3분이 지나지 않았습니다."]}
+        )
+    send_verify_mail.delay(user.pk, data)
+    return Response(status=status.HTTP_200_OK)
+
+
+def verify_email(request: MockRequest):
+    form = EmailVerifyForm(request.data)
+    if not form.is_valid():
+        return Response(form.errors, status=status.HTTP_400_BAD_REQUEST)
+    data = form.cleaned_data
+    code: str = data["code"]
+    storage = EmailVerifyStorage()
+    user = storage.get(code)
+    if not user:
+        raise exceptions.ValidationError(detail={"code": ["유효하지 않은 코드입니다"]})
+    if not user.is_verified:
+        user.is_verified = True
+        user.save()
+    storage.drop_email_term(user)
+    refresh_token = RefreshToken.for_user(user)
+    claim_token = CustomJWTAuthentication.append_token_claims(refresh_token, user)
+    return Response(claim_token)
+
+
+def refresh_token(request: MockRequest):
+    form = RefreshTokenForm(request.data)
+    if not form.is_valid():
+        return Response(form.errors, status=status.HTTP_400_BAD_REQUEST)
+    token: str = form.cleaned_data["refresh"]
+    try:
+        refresh_token = RefreshToken(token)
+    except:
+        raise exceptions.AuthenticationFailed
+    claim_token = CustomJWTAuthentication.append_token_claims(refresh_token)
+    return Response(claim_token)
