@@ -27,7 +27,7 @@ services:
       dockerfile: docker/dev/dockerfile
       context: .
     container_name: ${CONTAINER_NAME}
-    entrypoint: sh dev.sh runserver 0.0.0.0:8000
+    entrypoint: sh docker/deploy/run.sh
     volumes:
       - .:/usr/src/app
     ports:
