@@ -14,11 +14,7 @@ from email.mime.text import MIMEText
 from .models import User, ThirdPartyIntegration
 
 from googleapiclient.discovery import build
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-
-from rest_framework_simplejwt.tokens import RefreshToken
+from django.core.mail import EmailMessage, send_mail
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.send", "https://mail.google.com/"]
 
@@ -135,49 +131,18 @@ def google_get_self(access_token: str):
     return decrypt
 
 
-def get_credentials():
-    creds = None
-    if os.path.exists("token.json"):
-        creds = Credentials.from_authorized_user_file("token.json", SCOPES)
-    # If there are no (valid) credentials available, let the user log in.
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file("credential.json", SCOPES)
-            creds = flow.run_local_server(port=8080)
-
-        # Save the credentials for the next run
-        with open("token.json", "w") as token:
-            token.write(creds.to_json())
-
-    service = build("gmail", "v1", credentials=creds)
-    return service
-
-
 def send_verify_mail(to, username, verify_number):
-    service = get_credentials()
-    message = MIMEText(
+    message = (
         username + "님, 안녕하세요.<br/>"
         "메일 인증 번호는 <strong>"
         + verify_number
         + "</strong> 입니다.<br/>"
-        + "이 인증을 요청하지 않았다면 이 이메일을 무시하셔도 됩니다.<br/><br/>",
-        "html",
+        + "이 인증을 요청하지 않았다면 이 이메일을 무시하셔도 됩니다.<br/><br/>"
     )
-    message["to"] = to
-    message["from"] = "gksdjf1690@gmail.com"
-    message["subject"] = "블로그 메일 인증 번호 입니다."
-    raw_message_no_attachment = base64.urlsafe_b64encode(message.as_bytes())
-    raw_message_no_attachment = raw_message_no_attachment.decode()
-    body = {"raw": raw_message_no_attachment}
 
-    try:
-        service.users().messages().send(userId="me", body=body).execute()
-        return True
-    except Exception as e:
-        print(e)
-        return False
+    emailObject = EmailMessage("블로그 메일 인증 번호 입니다.", message, to=[to])
+    emailObject.content_subtype = "html"
+    result = emailObject.send()
 
 
 def refresh_thirdparty_verify():

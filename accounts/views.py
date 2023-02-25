@@ -26,6 +26,7 @@ from common_module.utils import MockRequest
 from .schemas import *
 from .forms import (
     AuthenticateByEmailForm,
+    AuthenticateByPasswordForm,
     AuthenticateByTPForm,
     SignupByEmailForm,
     EmailVerifyForm,
@@ -38,9 +39,9 @@ from .utils import (
     google_get_self,
     kakao_get_self,
     kakao_get_self_profile,
-    send_verify_mail,
     get_random_nums,
 )
+from .tasks import send_verify_mail
 from .verify_storages import EmailVerifyStorage
 
 
@@ -49,9 +50,6 @@ class MyRenderer(BaseRenderer):
 
     def render(self, request, data, *, response_status):
         return json.dumps(data)
-
-
-ninja = NinjaAPI(urls_namespace="auth", csrf=False)
 
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -67,223 +65,36 @@ class UserViewSet(viewsets.ModelViewSet):
         return serializer_classes.get(method, serializer_classes.get("__default__"))
 
 
-# @api_view(["POST"])
-# @authentication_classes([])
-@ninja.post("token", response=TokenResponse)
-def authenticate_by_email(request, form: EmailLoginSchema):
-    email_form = AuthenticateByEmailForm(data=form.dict())
-    if not email_form.is_valid():
-        raise exceptions.AuthenticationFailed(detail=email_form.errors)
-
-    data = email_form.cleaned_data
-
-    user = User.objects.filter(email=data["email"]).first()
-    if not user:
-        raise exceptions.AuthenticationFailed
-    refresh_token = RefreshToken.for_user(user)
-    claim_token = CustomJWTAuthentication.append_token_claims(refresh_token, user)
-    return claim_token
-
-
 class AuthenticateByTPSchema(Schema):
     type: str
     token: str
 
 
-def _process_thirdparty(form: AuthenticateByTPSchema):
-    def process_facebook(access_token: str):
-        response = fb_get_self(access_token)
-        profile_image_url = (
-            response["picture"]["data"]["url"]
-            if not response["picture"]["data"]["is_silhouette"]
-            else None
-        )
-        return TPInfo(
-            **{
-                "id": response["id"],
-                "name": response["name"],
-                "profile_image_url": profile_image_url,
-                "is_id_email": False,
-            }
-        )
-
-    def process_kakao(access_token: str):
-        token_info = kakao_get_self(access_token)
-        profile = kakao_get_self_profile(access_token)
-
-        return TPInfo(
-            **{
-                "id": str(token_info["id"]),
-                "name": profile["nickName"],
-                "profile_image_url": profile["profileImageURL"],
-                "is_id_email": False,
-            }
-        )
-
-    def process_apple(access_token: str):
-        response = apple_get_self(access_token)
-        return TPInfo(
-            **{
-                "id": response["email"],
-                "name": None,
-                "profile_image_url": None,
-                "is_id_email": True,
-            }
-        )
-
-    def process_google(access_token: str):
-        response = google_get_self(access_token)
-        return TPInfo(
-            **{
-                "id": response["email"],
-                "name": response["name"],
-                "profile_image_url": response["picture"],
-                "is_id_email": True,
-            }
-        )
-
-    auth_request_form = AuthenticateByTPForm(form.dict())
-    if not auth_request_form.is_valid():
-        # TODO: throw custom exception
-        raise Exception("form validation failed")
-
-    auth_request = auth_request_form.cleaned_data
-
-    type: str = auth_request["type"]
-    token: str = auth_request["token"]
-
-    if type == "kakao":
-        tp_info = process_kakao(token)
-    elif type == "facebook":
-        tp_info = process_facebook(token)
-    elif type == "apple":
-        tp_info = process_apple(token)
-    elif type == "google":
-        tp_info = process_google(token)
-    else:
-        raise Exception(f"${type} is not supported yet")
-
-    return type, token, tp_info
-
-
-# @api_view(["POST"])
-# @authentication_classes([])
-@ninja.post("signup/thirdparty", response=TPInfoSchema)
-def authenticate_by_thirdparty(request, form: AuthenticateByTPSchema):
-    (type, token, tp_info) = _process_thirdparty(form)
-
-    tp_integration: Optional[
-        ThirdPartyIntegration
-    ] = ThirdPartyIntegration.objects.filter(
-        type__exact=type, identifier__exact=tp_info["id"]
-    ).first()
-    if tp_integration is None:
-        raise exceptions.AuthenticationFailed
-    refresh_token = RefreshToken.for_user(tp_integration.user)
-    claim_token = CustomJWTAuthentication.append_token_claims(
-        refresh_token, tp_integration.user
+@api_view(["POST"])
+@permission_classes([])
+def password_login(request: MockRequest):
+    form = AuthenticateByPasswordForm(request.data)
+    if not form.is_valid():
+        return Response(form.errors, status=status.HTTP_400_BAD_REQUEST)
+    data = form.cleaned_data
+    email = data["email"]
+    user = (
+        User.objects.annotate(tp=models.F("tp_integrations"))
+        .filter(email=email, tp__isnull=True)
+        .first()
     )
-    return claim_token
+    if not user:
+        raise exceptions.ValidationError(detail={"auth": ["계정이 존재하지 않습니다."]})
+    if not user.check_password(data["password"]):
+        raise exceptions.ValidationError(detail={"auth": ["비밀번호가 일치하지 않습니다."]})
 
-
-# @api_view(["POST"])
-# @authentication_classes([])
-@ninja.post("signup/email/", response={201: SimpleResponseSchema})
-def signup_by_email(request, form: SignUpByEmailSchema):
-    signup_form = SignupByEmailForm(data=form.dict())
-    if not signup_form.is_valid():
-        raise errors.AuthenticationError
-    already = User.objects.filter(
-        models.Q(username=form.nickname) | models.Q(email=form.email)
-    )
-    if already.exists():
-        raise errors.AuthenticationError
-
-    data = signup_form.cleaned_data
-    new_user = User(
-        username=data["email"],
-        email=data["email"],
-        nickname=data["nickname"],
-    )
-    new_user.set_password(data["password"])
-
-    try:
-        with transaction.atomic():
-            new_user.save()
-    except:
-        raise
-
-    return 201, {"is_success": True}
-
-
-@ninja.post("signup/thirdparty", response=SimpleResponseSchema)
-def signup_by_thirdparty(request, form: AuthenticateByTPSchema):
-    def get_dummy_email(type: str, tp_user_id: str):
-        return f"{tp_user_id}@{type}.com"
-
-    def extract_username_from_email(email: str):
-        return email.split("@")[0]
-
-    (type, token, tp_info) = _process_thirdparty(form)
-    email = (
-        tp_info["id"]
-        if tp_info["is_id_email"]
-        else get_dummy_email(type, tp_info["id"])
-    )
-    username = f'{type}_{extract_username_from_email(tp_info["id"])}'
-    nickname = tp_info["name"] if tp_info["name"] is None else username
-
-    if type == "apple" and email.endswith("privaterelay.appleid.com"):
-        # XXX: apple에서 private relay 사용 시 name은 오지 않는 듯함
-        nickname = username
-
-    if ThirdPartyIntegration.objects.filter(
-        type__exact=type, identifier__exact=tp_info["id"]
-    ).exists():
-        raise errors.AuthenticationError
-
-    new_user = User(
-        username=username, email=email, nickname=nickname, bio="", is_verified=True
-    )
-    new_user.set_unusable_password()
-
-    tp_integration = ThirdPartyIntegration(
-        type=type, identifier=tp_info["id"], token=token
-    )
-
-    tp_integration.user = new_user
-
-    try:
-        with transaction.atomic():
-            new_user.save()
-            tp_integration.save()
-    except IntegrityError:
-        raise errors.AuthenticationError
-
-    return {"is_success": True}
+    refresh_token = RefreshToken.for_user(user)
+    claim_token = CustomJWTAuthentication.append_token_claims(refresh_token, user)
+    return Response(claim_token)
 
 
 @api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def verification_by_email(request: Request):
-    user: User = request.user
-    token = get_random_string(length=6)
-    user.set_verify_token(token)
-
-    is_send = send_verify_mail(user.email, user.nickname, user.verify_token)
-
-    if is_send:
-        user.save()
-        return Response(status=status.HTTP_200_OK)
-    else:
-        return Response(status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-@ninja.post("/parse", auth=AuthBearer())
-def parse_token(request):
-    return request.auth
-
-
+@permission_classes([])
 def email_login(request: MockRequest):
     form = AuthenticateByEmailForm(request.data)
     if not form.is_valid():
@@ -298,18 +109,23 @@ def email_login(request: MockRequest):
     )
     if not user:
         user = User(email=email, username=username, nickname=username)
-        user.set_password(str(uuid.uuid4()))
-        with transaction.atomic():
-            user.save()
+        user.save()
+        user_id = user.pk
+        if not user_id:
+            raise ConflictException(detail={"user": ["트랜젝션 오류 백엔드에게 문의하세요"]})
     storage = EmailVerifyStorage()
     if storage.get_email_term(user):
         raise exceptions.ValidationError(
             detail={"email": ["이메일을 발신한 지 3분이 지나지 않았습니다."]}
         )
-    send_verify_mail.delay(user.pk, data)
-    return Response(status=status.HTTP_200_OK)
+    code = storage.set(user)
+    storage.set_email_term(user)
+    send_verify_mail.delay(user.pk, data, code)
+    return Response({}, status=status.HTTP_200_OK)
 
 
+@api_view(["POST"])
+@permission_classes([])
 def verify_email(request: MockRequest):
     form = EmailVerifyForm(request.data)
     if not form.is_valid():
@@ -329,6 +145,8 @@ def verify_email(request: MockRequest):
     return Response(claim_token)
 
 
+@api_view(["POST"])
+@permission_classes([])
 def refresh_token(request: MockRequest):
     form = RefreshTokenForm(request.data)
     if not form.is_valid():
@@ -340,3 +158,8 @@ def refresh_token(request: MockRequest):
         raise exceptions.AuthenticationFailed
     claim_token = CustomJWTAuthentication.append_token_claims(refresh_token)
     return Response(claim_token)
+
+
+class ConflictException(exceptions.APIException):
+    status_code = exceptions.status.HTTP_409_CONFLICT
+    default_detail = {"not_implemented": ["정의되지 않은 오류입니다. 백엔드 개발자에게 에러내용을 추가해 달라고하세요"]}

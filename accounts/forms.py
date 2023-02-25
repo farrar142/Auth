@@ -1,14 +1,21 @@
 from django import forms
 
 
-class AuthenticateByEmailForm(forms.Form):
+class AuthenticateByTPForm(forms.Form):
+    type = forms.CharField(required=True)
+    token = forms.CharField(required=True)
+
+
+class AuthenticateByPasswordForm(forms.Form):
     email = forms.EmailField(required=True)
     password = forms.CharField(required=True)
 
 
-class AuthenticateByTPForm(forms.Form):
-    type = forms.CharField(required=True)
-    token = forms.CharField(required=True)
+class AuthenticateByEmailForm(forms.Form):
+    email = forms.EmailField(required=True)
+    callback = forms.URLField(required=True)
+    url = forms.CharField(required=True)
+    scheme = forms.CharField(required=True)
 
 
 class SignupByEmailForm(forms.Form):

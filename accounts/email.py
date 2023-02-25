@@ -1,7 +1,11 @@
 from datetime import datetime
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .tasks import EmailLoginNecessaries
 
 
-def get_email_login_html(data: dict, code: str, date: datetime):
+def get_email_login_html(data: "EmailLoginNecessaries", code: str, date: datetime):
     url = f"{data['callback']}?scheme={data['scheme']}&url={data['url']}&code={code}"
     return f"""<table
     cellpadding="0" cellspacing="0" border="0" width:"100%"
@@ -9,15 +13,6 @@ def get_email_login_html(data: dict, code: str, date: datetime):
     style="border-collapse:collapse!important;"
     >
     <tbody>
-        <tr>
-            <td align="center">
-                <img
-                    style=""
-                    src="https://assets.intervaltrainer.palzak.co/interval-trainer-main.png"
-                    alt="https://assets.intervaltrainer.palzak.co/interval-trainer-main.png"
-                />
-            </td>
-        </tr>
         <tr>
             <td align="center> valign="top" style="border-collapse:collapse!important;padding-top:10px">
                 <table 

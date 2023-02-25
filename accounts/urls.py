@@ -3,24 +3,27 @@ from rest_framework import routers
 from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 
 from .views import (
-    authenticate_by_email,
-    signup_by_email,
-    authenticate_by_thirdparty,
-    signup_by_thirdparty,
-    verification_by_email,
-    verification_token,
+    UserViewSet,
+    email_login,
+    password_login,
+    verify_email,
+    refresh_token,
 )
 
-api_router = routers.DefaultRouter()
 
-# urlpatterns = [
-#     path("", include(api_router.urls)),
-#     path("auth/signup/email", signup_by_email),
-#     path("auth/signup/thirdparty", signup_by_thirdparty),
-#     path("auth/verify/email", verification_by_email),
-#     path("auth/verify", verification_token),
-#     path("auth/token", authenticate_by_email, name="token_obtain_pair"),
-#     path("auth/token/thirdparty", authenticate_by_thirdparty),
-#     path("auth/token/refresh", TokenRefreshView.as_view(), name="token_refresh"),
-#     path("auth/ping", TokenVerifyView.as_view(), name="token_ping"),
-# ]
+api_router = routers.DefaultRouter()
+router = routers.DefaultRouter()
+
+router.register("users", UserViewSet)
+
+
+urlpatterns = [
+    path("", include(router.urls)),
+    path("auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path("auth/ping/", TokenVerifyView.as_view(), name="token_ping"),
+    path("auth/signin/classic/", password_login),
+    path("auth/signup/email/", email_login),
+    path("auth/token/", verify_email),
+    path("auth/token/refresh/", refresh_token, name="token_refresh/"),
+    path("auth/ping/", TokenVerifyView.as_view(), name="token_ping/"),
+]

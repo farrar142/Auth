@@ -44,8 +44,8 @@ services:
     entrypoint: 'sh docker/celery.sh ${CONTAINER_NAME}'
     container_name: ${CONTAINER_NAME}_celery
     hostname: root
-    volumes:
-      - /var/run/celery:/var/run
+    # volumes:
+      # - /var/run/celery:/var/run
       # - /home/ubuntu/nginx/data/${CONTAINER_NAME}:/tmp/uwsgi
     restart: unless-stopped
     working_dir: /usr/src/app
