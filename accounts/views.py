@@ -9,6 +9,7 @@ from django.contrib.auth.models import AnonymousUser
 from django.core.files.uploadedfile import UploadedFile
 from django.db import IntegrityError, models, transaction
 from django.http import HttpRequest, HttpResponse
+from django.shortcuts import render
 from django.utils.crypto import get_random_string
 from ninja import NinjaAPI, Schema, errors
 from ninja.renderers import BaseRenderer
@@ -23,6 +24,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from accounts.serializers import UserReadOnlySerializer, UserUpsertSerializer
 from base.authentications import AuthBearer, CustomJWTAuthentication
 from common_module.utils import MockRequest
+from common_module.views import DisallowEditOtherUsersResourceMixin
 from .schemas import *
 from .forms import (
     AuthenticateByEmailForm,
@@ -45,14 +47,7 @@ from .tasks import send_verify_mail
 from .verify_storages import EmailVerifyStorage
 
 
-class MyRenderer(BaseRenderer):
-    media_type = "application/json"
-
-    def render(self, request, data, *, response_status):
-        return json.dumps(data)
-
-
-class UserViewSet(viewsets.ModelViewSet):
+class UserViewSet(DisallowEditOtherUsersResourceMixin, viewsets.ModelViewSet):
     queryset = User.objects.all()
 
     def get_serializer_class(self):
@@ -63,6 +58,9 @@ class UserViewSet(viewsets.ModelViewSet):
         method = self.request.method or "GET"
 
         return serializer_classes.get(method, serializer_classes.get("__default__"))
+
+    def create(self, request, *args, **kwargs):
+        raise exceptions.NotAcceptable
 
 
 class AuthenticateByTPSchema(Schema):
@@ -163,3 +161,21 @@ def refresh_token(request: MockRequest):
 class ConflictException(exceptions.APIException):
     status_code = exceptions.status.HTTP_409_CONFLICT
     default_detail = {"not_implemented": ["정의되지 않은 오류입니다. 백엔드 개발자에게 에러내용을 추가해 달라고하세요"]}
+
+
+def auth_landing(request: HttpRequest):
+    print(f"{request.GET=}")
+    code = request.GET["code"]
+    scheme = request.GET["scheme"]
+    url = request.GET["url"]
+    storage = EmailVerifyStorage()
+    user = storage.get(code)
+    if not user:
+        return render(request, "accounts/404.html")
+    storage.drop_email_term(user)
+    refresh_token = RefreshToken.for_user(user)
+    claim_token = CustomJWTAuthentication.append_token_claims(refresh_token, user)
+    print({**request.GET})
+    return render(
+        request, "accounts/landing.html", {**claim_token, "scheme": scheme, "url": url}
+    )

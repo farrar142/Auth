@@ -8,6 +8,7 @@ from .views import (
     password_login,
     verify_email,
     refresh_token,
+    auth_landing,
 )
 
 
@@ -19,11 +20,12 @@ router.register("users", UserViewSet)
 
 urlpatterns = [
     path("", include(router.urls)),
-    path("auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
-    path("auth/ping/", TokenVerifyView.as_view(), name="token_ping"),
-    path("auth/signin/classic/", password_login),
-    path("auth/signup/email/", email_login),
-    path("auth/token/", verify_email),
-    path("auth/token/refresh/", refresh_token, name="token_refresh/"),
-    path("auth/ping/", TokenVerifyView.as_view(), name="token_ping/"),
+    path("auth/token/refresh", TokenRefreshView.as_view(), name="token_refresh"),
+    path("auth/ping", TokenVerifyView.as_view(), name="token_ping"),
+    path("auth/signin/classic", password_login),
+    path("auth/signup/email", email_login),
+    path("auth/token", verify_email),
+    path("auth/token/refresh", refresh_token, name="token_refresh/"),
+    path("auth/ping", TokenVerifyView.as_view(), name="token_ping/"),
+    path("auth/landing", auth_landing),
 ]
