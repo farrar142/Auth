@@ -9,6 +9,7 @@ import requests
 
 import base64
 import os.path
+import os as env
 from email.mime.text import MIMEText
 
 from rest_framework import exceptions
@@ -17,6 +18,9 @@ from .models import User, ThirdPartyIntegration
 
 from googleapiclient.discovery import build
 from django.core.mail import EmailMessage, send_mail
+from dotenv import load_dotenv
+
+load_dotenv()
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.send", "https://mail.google.com/"]
 
@@ -103,8 +107,8 @@ def fb_get_self(access_token: str) -> FBUser:
     return response.json()
 
 
-KAKAO_REST_API_KEY = "101b0527f4974976322a394c854161ff"
-KAKAO_REDIRECT_URI = "http://localhost:3000/auth/redirection"
+KAKAO_REST_API_KEY = env.getenv("KAKAO_REST_API_KEY", "")
+KAKAO_REDIRECT_URI = env.getenv("KAKAO_REDIRECT_URI", "")
 
 
 def kakao_authorize(code: str):
