@@ -1,1 +1,0 @@
-docker buildx build --push --no-cache --platform linux/$1 --tag sandring/blog:$1 -f docker/build/dockerfile .
