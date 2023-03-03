@@ -2,13 +2,12 @@ version: '3.7'
 
 services:
   dev:
-    build:
-      dockerfile: docker/dev/dockerfile
-      context: .
+    image: sandring/blog:${PLATFORM}
     container_name: ${CONTAINER_NAME}
     entrypoint: tail -f /dev/null
     volumes:
       - .:/usr/src/app
+      - ~/.ssh:/root/.ssh:ro
     ports:
       - ${CONTAINER_PORT}:8000
     restart: unless-stopped
@@ -19,9 +18,12 @@ services:
       retries: 30
       start_period: 60s
     build:
-      dockerfile: docker/dev/dockerfile
+      dockerfile: docker/deploy/dockerfile
       context: .
-    container_name: ${CONTAINER_NAME}
+      args:
+        CONTAINER_NAME: ${CONTAINER_NAME}
+        PLATFORM: ${PLATFORM}
+    container_name: ${CONTAINER_NAME}_deploy
     entrypoint: sh docker/deploy/run.sh
     volumes:
       - .:/usr/src/app
@@ -36,6 +38,9 @@ services:
     build:
       dockerfile: docker/deploy/dockerfile
       context: .
+      args:
+        CONTAINER_NAME: ${CONTAINER_NAME}
+        PLATFORM: ${PLATFORM}
     entrypoint: 'sh docker/celery.sh ${CONTAINER_NAME}'
     container_name: ${CONTAINER_NAME}_celery
     hostname: root

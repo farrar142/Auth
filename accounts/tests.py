@@ -49,12 +49,14 @@ class TestKakaoLogin(TestCase):
         token = "D08KpOibeAc7yw07ERq-UOCewCPnup2KCAxkg-_7NCGZIo6jD-ukOptRmLHDCsRzMzcf9worDSAAAAGGqIQPLA"
         from accounts.utils import kakao_get_self_profile
 
-        resp = self.client.post(
-            "/auth/signup/thirdparty", {"type": "kakao", "token": token}
-        )
+        resp = self.client.get("/users/")
         print(resp.json())
+        # resp = self.client.post(
+        #     "/auth/signup/thirdparty", {"type": "kakao", "token": token}
+        # )
+        # print(resp.json())
 
-        resp = self.client.post(
-            "/auth/signin/thirdparty", {"type": "kakao", "token": token}
-        )
-        print(resp.json())
+        # resp = self.client.post(
+        #     "/auth/signin/thirdparty", {"type": "kakao", "token": token}
+        # )
+        # print(resp.json())

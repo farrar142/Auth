@@ -51,6 +51,7 @@ from .verify_storages import EmailVerifyStorage
 
 class UserViewSet(DisallowEditOtherUsersResourceMixin, viewsets.ModelViewSet):
     queryset = User.objects.all()
+    ordering = ("-id",)
 
     def get_serializer_class(self):
         serializer_classes = {
