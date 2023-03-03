@@ -2,7 +2,7 @@ version: '3.7'
 
 services:
   dev:
-    image: sandring/blog:${PLATFORM}
+    image: sandring/blog:${PLATFORM}-dev
     container_name: ${CONTAINER_NAME}
     entrypoint: tail -f /dev/null
     volumes:
