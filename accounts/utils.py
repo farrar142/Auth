@@ -1,8 +1,9 @@
+from dataclasses import fields
 from datetime import datetime, timedelta
 
 import jwt
 
-from typing import TypedDict, Any
+from typing import Literal, Optional, TypedDict, Any
 
 import requests
 
@@ -10,6 +11,7 @@ import base64
 import os.path
 from email.mime.text import MIMEText
 
+from rest_framework import exceptions
 
 from .models import User, ThirdPartyIntegration
 
@@ -42,9 +44,31 @@ class KakaoTokenInfo(TypedDict):
     app_id: int
 
 
+class KakaoCodeAuthorization(TypedDict):
+    access_token: str
+    token_type: Literal["bearer"]
+    refresh_token: str
+    expires_in: int
+    refresh_token_expires_in: int
+
+
 class KakaoProfile(TypedDict):
-    nickName: str
-    profileImageURL: str
+    nickname: str
+    profile_image_url: str
+    thumbnail_image_url: str
+
+
+class KakaoAccount(TypedDict):
+    id: int
+    has_email: bool
+    profile: KakaoProfile
+
+
+class KakaoAccountEmail(TypedDict):
+    id: int
+    email: str
+    has_email: bool
+    profile: KakaoProfile
 
 
 class AppleTokenInfo(TypedDict):
@@ -79,34 +103,45 @@ def fb_get_self(access_token: str) -> FBUser:
     return response.json()
 
 
-def kakao_get_self(access_token: str) -> KakaoTokenInfo:
-    """
-    Kakao API를 사용하여 사용자 자신의 정보를 취득합니다.
-    """
-    response = requests.get(
-        "https://kapi.kakao.com/v1/user/access_token_info",
-        headers={"Authorization": f"Bearer {access_token}"},
-    )
-
-    if response.status_code != 200:
-        raise Exception("kakao_get_self() failed")
-
-    return response.json()
+KAKAO_REST_API_KEY = "101b0527f4974976322a394c854161ff"
+KAKAO_REDIRECT_URI = "http://localhost:3000/auth/redirection"
 
 
-def kakao_get_self_profile(access_token: str) -> KakaoProfile:
+def kakao_authorize(code: str):
+    endpoint = "https://kauth.kakao.com/oauth/token"
+    args = {}
+    args.update(grant_type="authorization_code")
+    args.update(client_id=KAKAO_REST_API_KEY)
+    args.update(redirect_uri=KAKAO_REDIRECT_URI)
+    args.update(code=code)
+    resp = requests.get(endpoint, args)
+    if resp.status_code != 200:
+        raise exceptions.ValidationError(
+            detail={resp.json()["error"]: resp.json()["error_description"]}
+        )
+    return KakaoCodeAuthorization(**resp.json())
+
+
+def kakao_get_self_profile(code: str) -> KakaoAccountEmail:
     """
     KakaoTalk 사용자 자신의 프로필 정보를 취득합니다
     """
+    token = kakao_authorize(code)
     response = requests.get(
-        "https://kapi.kakao.com/v1/api/talk/profile",
-        headers={"Authorization": f"Bearer {access_token}"},
+        "https://kapi.kakao.com/v2/user/me",
+        # data={"scopes": ["profile_nickname", "profile_image", "account_email"]},
+        headers={"Authorization": f"Bearer {token['access_token']}"},
     )
-
     if response.status_code != 200:
         raise Exception("kakao_get_self_profile() failed")
+    json = response.json()
+    arranged = {**json.get("kakao_account"), "id": json.get("id")}
+    info = KakaoAccount(**arranged)
+    from pprint import pprint
 
-    return response.json()
+    pprint(info)
+    dummy_email = str(info["id"]) + "@kakao.com"
+    return KakaoAccountEmail(email=dummy_email, **info)
 
 
 def apple_get_self(access_token: str):

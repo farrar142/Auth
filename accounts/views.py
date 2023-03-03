@@ -1,6 +1,5 @@
-import datetime
+import requests
 import json
-import logging
 from io import BytesIO
 from typing import Iterable, Optional, Tuple, TypedDict
 
@@ -14,7 +13,11 @@ from django.utils.crypto import get_random_string
 from ninja import NinjaAPI, Schema, errors
 from ninja.renderers import BaseRenderer
 from rest_framework import exceptions, generics, permissions, status, viewsets
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import (
+    api_view,
+    permission_classes,
+    authentication_classes,
+)
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -39,7 +42,6 @@ from .utils import (
     apple_get_self,
     fb_get_self,
     google_get_self,
-    kakao_get_self,
     kakao_get_self_profile,
     get_random_nums,
 )
@@ -61,6 +63,78 @@ class UserViewSet(DisallowEditOtherUsersResourceMixin, viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         raise exceptions.NotAcceptable
+
+
+def _process_thirdparty(request: Request) -> Tuple[str, str, TPInfo]:
+    def process_facebook(access_token: str) -> TPInfo:
+        response = fb_get_self(access_token)
+        profile_image_url = (
+            response["picture"]["data"]["url"]
+            if not response["picture"]["data"]["is_silhouette"]
+            else None
+        )
+        return TPInfo(
+            **{
+                "id": response["id"],
+                "name": response["name"],
+                "profile_image_url": profile_image_url,
+                "is_id_email": False,
+            }
+        )
+
+    def process_kakao(access_token: str) -> TPInfo:
+        # token_info = kakao_get_self(access_token)
+        response = kakao_get_self_profile(access_token)
+        return TPInfo(
+            **{
+                "id": response["email"],
+                "name": response["profile"]["nickname"],
+                "profile_image_url": response["profile"]["profile_image_url"],
+                "is_id_email": True,
+            }
+        )
+
+    def process_apple(access_token: str) -> TPInfo:
+        response = apple_get_self(access_token)
+        return TPInfo(
+            **{
+                "id": response["email"],
+                "name": None,
+                "profile_image_url": None,
+                "is_id_email": True,
+            }
+        )
+
+    def process_google(access_token: str) -> TPInfo:
+        response = google_get_self(access_token)
+        return {
+            "id": response["email"],
+            "name": response["name"],
+            "profile_image_url": response["picture"],
+            "is_id_email": True,
+        }
+
+    if request.method != "POST":
+        raise Exception("Method not allowed")
+
+    body = json.loads(request.body.decode("utf-8"))
+    auth_request_form = AuthenticateByTPForm(data=body)
+    auth_request_form.is_valid(raise_exception=True)
+    auth_request = auth_request_form.validated_data
+
+    type = auth_request["type"]
+    token = auth_request["token"]
+    if type == "kakao":
+        tp_info = process_kakao(token)
+    elif type == "facebook":
+        tp_info = process_facebook(token)
+    elif type == "apple":
+        tp_info = process_apple(token)
+    elif type == "google":
+        tp_info = process_google(token)
+    else:
+        raise Exception(f"${type} is not supported yet")
+    return type, token, tp_info
 
 
 class AuthenticateByTPSchema(Schema):
@@ -179,3 +253,90 @@ def auth_landing(request: HttpRequest):
     return render(
         request, "accounts/landing.html", {**claim_token, "scheme": scheme, "url": url}
     )
+
+
+@api_view(["POST"])
+@authentication_classes([])
+def signup_by_thirdparty(request: Request):
+    def get_dummy_email(type: str, tp_user_id: str):
+        return f"{tp_user_id}@{type}.com"
+
+    def extract_username_from_email(email: str) -> str:
+        return email.split("@")[0]
+
+    (type, token, tp_info) = _process_thirdparty(request)
+    email = (
+        tp_info["id"]
+        if tp_info["is_id_email"]
+        else get_dummy_email(type, tp_info["id"])
+    )
+    username = f'{type}_{extract_username_from_email(tp_info["id"])}'
+    nickname = tp_info.get("name", username) or username
+    username = username + "#" + "".join(get_random_nums(4))
+    if type == "apple" and email.endswith("privaterelay.appleid.com"):
+        # XXX: apple에서 private relay 사용 시 name은 오지 않는 듯함
+        nickname = username
+    if ThirdPartyIntegration.objects.filter(
+        type__exact=type, identifier__exact=tp_info["id"]
+    ).exists():
+        raise exceptions.ValidationError(
+            detail={"user": [f"{email}로 가입된 계정이 이미 존재합니다."]}
+        )
+    new_user = User(username=username, email=email, nickname=nickname, is_verified=True)
+    user_dict = {}
+    user_dict.update(
+        username=username,
+        email=email,
+        nickname=nickname,
+        bio="",
+        is_verified=True,
+        type=type,
+        identifier=tp_info["id"],
+        token=token,
+    )
+    new_user.set_unusable_password()
+    tp_integration = ThirdPartyIntegration(
+        type=type, identifier=tp_info["id"], token=token
+    )
+    tp_integration.user = new_user
+
+    if tp_info["profile_image_url"] is not None:
+        try:
+            response = requests.get(tp_info["profile_image_url"])
+            image_stream = BytesIO(response.content)
+        except Exception as e:
+            print(e)
+
+    try:
+        with transaction.atomic():
+            new_user.save()
+            tp_integration.save()
+    except IntegrityError:
+        return Response(
+            {"user": ["데이터 저장중에 문제가 생겼습니다."]}, status=status.HTTP_400_BAD_REQUEST
+        )
+
+    return Response({"is_success": True})
+
+
+@api_view(["POST"])
+@authentication_classes([])
+def authenticate_by_thirdparty(request: MockRequest):
+    (type, token, tp_info) = _process_thirdparty(request)
+
+    tp_integration: Optional[
+        ThirdPartyIntegration
+    ] = ThirdPartyIntegration.objects.filter(
+        type__exact=type, identifier__exact=tp_info["id"]
+    ).first()
+    if tp_integration == None:
+        return Response(
+            {"auth": [f"{type} 으로 가입된 유저가 없습니다."]}, status=status.HTTP_401_UNAUTHORIZED
+        )
+        # raise exceptions.AuthenticationFailed(
+        #     detail={"auth": [f"{type} 으로 가입된 유저가 없습니다."]}
+        # )
+
+    refresh_token = RefreshToken.for_user(tp_integration.user)
+    claim_token = CustomJWTAuthentication.append_token_claims(refresh_token)
+    return Response(claim_token)

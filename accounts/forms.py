@@ -1,9 +1,10 @@
 from django import forms
+from rest_framework import serializers
 
 
-class AuthenticateByTPForm(forms.Form):
-    type = forms.CharField(required=True)
-    token = forms.CharField(required=True)
+class AuthenticateByTPForm(serializers.Serializer):
+    type = serializers.CharField(required=True)
+    token = serializers.CharField(required=True)
 
 
 class AuthenticateByPasswordForm(forms.Form):

@@ -42,3 +42,19 @@ def find_email_key():
     keys: list[str] = cache.keys("*")
     email_key = list(filter(lambda x: not x.startswith("email"), keys))
     return email_key[0]
+
+
+class TestKakaoLogin(TestCase):
+    def test_kakao_authorize(self):
+        token = "D08KpOibeAc7yw07ERq-UOCewCPnup2KCAxkg-_7NCGZIo6jD-ukOptRmLHDCsRzMzcf9worDSAAAAGGqIQPLA"
+        from accounts.utils import kakao_get_self_profile
+
+        resp = self.client.post(
+            "/auth/signup/thirdparty", {"type": "kakao", "token": token}
+        )
+        print(resp.json())
+
+        resp = self.client.post(
+            "/auth/signin/thirdparty", {"type": "kakao", "token": token}
+        )
+        print(resp.json())

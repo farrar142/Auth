@@ -9,6 +9,8 @@ from .views import (
     verify_email,
     refresh_token,
     auth_landing,
+    signup_by_thirdparty,
+    authenticate_by_thirdparty,
 )
 
 
@@ -23,6 +25,8 @@ urlpatterns = [
     path("auth/token/refresh", TokenRefreshView.as_view(), name="token_refresh"),
     path("auth/ping", TokenVerifyView.as_view(), name="token_ping"),
     path("auth/signin/classic", password_login),
+    path("auth/signin/thirdparty", authenticate_by_thirdparty),
+    path("auth/signup/thirdparty", signup_by_thirdparty),
     path("auth/signup/email", email_login),
     path("auth/token", verify_email),
     path("auth/token/refresh", refresh_token, name="token_refresh/"),
