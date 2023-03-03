@@ -1,6 +1,6 @@
 [submodule "common_module"]
 	path = common_module
-	url = https://github.com/farrar142/common_module
+	url = git@github.com:farrar142//common_module.git
 [submodule "docker"]
 	path = docker
 	url = git@github.com:farrar142/py-docker.git
