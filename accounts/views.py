@@ -89,6 +89,7 @@ class UserViewSet(DisallowEditOtherUsersResourceMixin, viewsets.ModelViewSet):
         serializer = NickNameSerializer(data=self.request.query_params)  # type:ignore
         serializer.is_valid(raise_exception=True)
         nickname = serializer.validated_data["nickname"]
+        print(serializer.validated_data)
         user = User.objects.filter(nickname=nickname).first()
         if not user:
             raise exceptions.NotFound

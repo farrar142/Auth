@@ -53,7 +53,6 @@ class CustomJWTAuthentication(JWTAuthentication):
         raw_token = self.get_raw_token(header)
         if raw_token is None:
             return None
-        print(raw_token)
         token = parse_jwt(raw_token)  # type: ignore
         if not token:
             raise exceptions.AuthenticationFailed
