@@ -36,6 +36,11 @@ class TestUserCreate(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         send_verify_mail.delay(1, data, "fffff")
 
+    def test_find_by_user_name(self):
+        resp = self.client.get(f"/users/find_by_name/{self.user2.username}/")
+        print(resp.json())
+        self.assertEqual(resp.status_code, 200)
+
 
 def find_email_key():
     keys: list[str] = cache.keys("*")

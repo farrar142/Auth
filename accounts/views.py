@@ -72,6 +72,15 @@ class UserViewSet(DisallowEditOtherUsersResourceMixin, viewsets.ModelViewSet):
         serializer = UserReadOnlySerializer(instance=self.request.user)
         return Response(data=serializer.data)
 
+    @action(methods=["GET"], detail=False, url_path="find_by_name/(?P<username>\w+)")
+    def get_blog_of_user(self, *args, **kwargs):
+        username = kwargs["username"]
+        user = User.objects.filter(username=username).first()
+        if not user:
+            raise exceptions.NotFound
+        serializer = self.get_serializer(instance=user)
+        return Response(serializer.data)
+
 
 def _process_thirdparty(request: Request) -> Tuple[str, str, TPInfo]:
     def process_facebook(access_token: str) -> TPInfo:
