@@ -21,7 +21,7 @@ services:
       args:
         PLATFORM: ${PLATFORM}
     container_name: ${CONTAINER_NAME}_deploy
-    entrypoint: sh docker/deploy/run.sh
+    entrypoint: sh /usr/src/app/docker/deploy/run.sh
     volumes:
       - .:/usr/src/app
     ports:
@@ -36,7 +36,6 @@ services:
       dockerfile: docker/deploy/dockerfile
       context: .
       args:
-        CONTAINER_NAME: ${CONTAINER_NAME}
         PLATFORM: ${PLATFORM}
     entrypoint: 'sh docker/celery.sh ${CONTAINER_NAME}'
     container_name: ${CONTAINER_NAME}_celery
