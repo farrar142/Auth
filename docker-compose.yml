@@ -24,7 +24,7 @@ services:
     entrypoint: sh docker/deploy/run.sh
     hostname: root
     ports:
-      - '${PORT}:8000'
+      - '${CONTAINER_PORT}:8000'
     restart: unless-stopped
     working_dir: /usr/src/app
     environment:
