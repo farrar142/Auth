@@ -8,8 +8,6 @@ services:
     volumes:
       - .:/usr/src/app
       - ~/.ssh:/root/.ssh:ro
-    ports:
-      - ${CONTAINER_PORT}:8000
     restart: unless-stopped
   deploy:
     healthcheck:
