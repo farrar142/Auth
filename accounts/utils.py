@@ -129,11 +129,11 @@ def kakao_get_self_profile(code: str) -> KakaoAccountEmail:
     """
     KakaoTalk 사용자 자신의 프로필 정보를 취득합니다
     """
-    token = kakao_authorize(code)
+    # token = kakao_authorize(code)
     response = requests.get(
         "https://kapi.kakao.com/v2/user/me",
         # data={"scopes": ["profile_nickname", "profile_image", "account_email"]},
-        headers={"Authorization": f"Bearer {token['access_token']}"},
+        headers={"Authorization": f"Bearer {code}"},
     )
     if response.status_code != 200:
         raise Exception("kakao_get_self_profile() failed")
