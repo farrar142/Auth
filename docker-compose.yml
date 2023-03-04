@@ -21,7 +21,6 @@ services:
       dockerfile: docker/deploy/dockerfile
       context: .
       args:
-        CONTAINER_NAME: ${CONTAINER_NAME}
         PLATFORM: ${PLATFORM}
     container_name: ${CONTAINER_NAME}_deploy
     entrypoint: sh docker/deploy/run.sh
