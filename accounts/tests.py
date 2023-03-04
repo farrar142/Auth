@@ -43,6 +43,10 @@ class TestUserCreate(TestCase):
         print(resp.json())
         self.assertEqual(resp.status_code, 200)
 
+    def test_authorize(self):
+        self.client.fake()
+        self.client.get("/users/")
+
 
 def find_email_key():
     keys: list[str] = cache.keys("*")

@@ -24,6 +24,11 @@ class Client(APIClient):
     def login_with_token(self, token: str):
         self.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
 
+    def fake(self):
+        self.credentials(
+            HTTP_AUTHORIZATION=f"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNjc3OTM2MjkzLCJpYXQiOjE2Nzc5MzU5OTMsImp0aSI6IjljYjk0MzM0NTMxMzQyYjJhMDBiOGZhMTk4NzM2ZWZmIiwidXNlcl9pZCI6Mywicm9sZSI6W119.lZdMAZ3FNWNXSpXpKzfRlDWwxA498_4dEIl7T0nd_K8"
+        )
+
     def login(self, user):
         token = str(RefreshToken.for_user(user).access_token)
         self.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")

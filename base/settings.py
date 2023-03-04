@@ -155,10 +155,7 @@ EMAIL_HOST_USER = os.getenv("GOOGLE_ACCOUNT")
 EMAIL_HOST_PASSWORD = os.getenv("GOOGLE_PASSWORD")
 
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
-        # "runthe_backend.authentication.CustomJWTAuthentication"
-    ],
+    "DEFAULT_AUTHENTICATION_CLASSES": ["base.authentications.CustomJWTAuthentication"],
     "DEFAULT_FILTER_BACKENDS": [
         "django_filters.rest_framework.DjangoFilterBackend",
         "rest_framework.filters.SearchFilter",
