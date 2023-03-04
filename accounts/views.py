@@ -10,13 +10,12 @@ from django.db import IntegrityError, models, transaction
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.utils.crypto import get_random_string
-from ninja import NinjaAPI, Schema, errors
-from ninja.renderers import BaseRenderer
 from rest_framework import exceptions, generics, permissions, status, viewsets
 from rest_framework.decorators import (
     api_view,
     permission_classes,
     authentication_classes,
+    action,
 )
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -51,6 +50,7 @@ from .verify_storages import EmailVerifyStorage
 
 class UserViewSet(DisallowEditOtherUsersResourceMixin, viewsets.ModelViewSet):
     queryset = User.objects.all()
+    lookup_value_regex = r"me|\d+"
     ordering = ("-id",)
 
     def get_serializer_class(self):
@@ -64,6 +64,13 @@ class UserViewSet(DisallowEditOtherUsersResourceMixin, viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         raise exceptions.NotAcceptable
+
+    @action(methods=["GET"], detail=False, url_path="me")
+    def my_info(self, *args, **kwargs):
+        if isinstance(self.request.user, AnonymousUser):
+            raise exceptions.NotAuthenticated
+        serializer = UserReadOnlySerializer(instance=self.request.user)
+        return Response(data=serializer.data)
 
 
 def _process_thirdparty(request: Request) -> Tuple[str, str, TPInfo]:
@@ -136,11 +143,6 @@ def _process_thirdparty(request: Request) -> Tuple[str, str, TPInfo]:
     else:
         raise Exception(f"${type} is not supported yet")
     return type, token, tp_info
-
-
-class AuthenticateByTPSchema(Schema):
-    type: str
-    token: str
 
 
 @api_view(["POST"])

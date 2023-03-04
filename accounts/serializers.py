@@ -23,7 +23,7 @@ class UserUpsertSerializer(BaseSerializer):
     class Meta:
         model = User
         fields = ("id", "username", "nickname", "role", "image")
-        read_only_fields = ("role", "image")
+        read_only_fields = ("username", "role", "image")
 
     role = serializers.SerializerMethodField()
     image = serializers.FileField(

@@ -34,7 +34,6 @@ class TestUserCreate(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         resp = self.client.post("/auth/token", {"code": email_key})
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
-        print(User.objects.all().values())
         send_verify_mail.delay(1, data, "fffff")
 
 
@@ -50,7 +49,11 @@ class TestKakaoLogin(TestCase):
         from accounts.utils import kakao_get_self_profile
 
         resp = self.client.get("/users/")
+        self.assertEqual("next" in resp.json().keys(), True)
+        self.client.login(self.user)
+        resp = self.client.get("/users/me/")
         print(resp.json())
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
         # resp = self.client.post(
         #     "/auth/signup/thirdparty", {"type": "kakao", "token": token}
         # )
