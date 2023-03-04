@@ -21,18 +21,15 @@ services:
       args:
         PLATFORM: ${PLATFORM}
     container_name: ${CONTAINER_NAME}_deploy
-    hostname: root
-    working_dir: /usr/src/app
     entrypoint: sh docker/deploy/run.sh
-    volumes:
-      - .:/usr/src/app
+    hostname: root
     ports:
-      - ${CONTAINER_PORT}:8000
+      - '${PORT}:8000'
     restart: unless-stopped
-    # cpus: .10
-    # mem_limit: "1.5G"
+    working_dir: /usr/src/app
     environment:
       TZ: 'Asia/Seoul'
+
   celery:
     build:
       dockerfile: docker/deploy/dockerfile
