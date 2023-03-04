@@ -16,8 +16,7 @@ from rest_framework import exceptions
 
 from .models import User, ThirdPartyIntegration
 
-from googleapiclient.discovery import build
-from django.core.mail import EmailMessage, send_mail
+from django.core.mail import EmailMessage
 from dotenv import load_dotenv
 
 load_dotenv()
