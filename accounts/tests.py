@@ -37,7 +37,9 @@ class TestUserCreate(TestCase):
         send_verify_mail.delay(1, data, "fffff")
 
     def test_find_by_user_name(self):
-        resp = self.client.get(f"/users/find_by_name/{self.user2.username}/")
+        resp = self.client.get(
+            f"/users/find_by_name/", {"nickname": self.user2.nickname}
+        )
         print(resp.json())
         self.assertEqual(resp.status_code, 200)
 

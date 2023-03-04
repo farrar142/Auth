@@ -10,7 +10,14 @@ from django.db import IntegrityError, models, transaction
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.utils.crypto import get_random_string
-from rest_framework import exceptions, generics, permissions, status, viewsets
+from rest_framework import (
+    exceptions,
+    generics,
+    permissions,
+    status,
+    viewsets,
+    serializers,
+)
 from rest_framework.decorators import (
     api_view,
     permission_classes,
@@ -48,7 +55,12 @@ from .tasks import send_verify_mail
 from .verify_storages import EmailVerifyStorage
 
 
+class NickNameSerializer(serializers.Serializer):
+    nickname = serializers.CharField()
+
+
 class UserViewSet(DisallowEditOtherUsersResourceMixin, viewsets.ModelViewSet):
+    request: MockRequest
     queryset = User.objects.all()
     lookup_value_regex = r"me|\d+"
     ordering = ("-id",)
@@ -72,10 +84,12 @@ class UserViewSet(DisallowEditOtherUsersResourceMixin, viewsets.ModelViewSet):
         serializer = UserReadOnlySerializer(instance=self.request.user)
         return Response(data=serializer.data)
 
-    @action(methods=["GET"], detail=False, url_path="find_by_name/(?P<username>\w+)")
+    @action(methods=["GET"], detail=False, url_path="find_by_name")
     def get_blog_of_user(self, *args, **kwargs):
-        username = kwargs["username"]
-        user = User.objects.filter(username=username).first()
+        serializer = NickNameSerializer(data=self.request.query_params)  # type:ignore
+        serializer.is_valid(raise_exception=True)
+        nickname = serializer.validated_data["nickname"]
+        user = User.objects.filter(nickname=nickname).first()
         if not user:
             raise exceptions.NotFound
         serializer = self.get_serializer(instance=user)
