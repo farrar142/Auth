@@ -358,7 +358,7 @@ def authenticate_by_thirdparty(request: MockRequest):
     ).first()
     if tp_integration == None:
         return Response(
-            {"auth": [f"{type} 으로 가입된 유저가 없습니다."]}, status=status.HTTP_401_UNAUTHORIZED
+            {"auth": [f"{type} 으로 가입된 유저가 없습니다."]}, status=status.HTTP_404_NOT_FOUND
         )
         # raise exceptions.AuthenticationFailed(
         #     detail={"auth": [f"{type} 으로 가입된 유저가 없습니다."]}
