@@ -1,9 +1,11 @@
 import os
 from dotenv import load_dotenv
 from rest_framework import status
+from rest_framework_simplejwt.tokens import RefreshToken
 from accounts.models import User
 from accounts.schemas import TokenResponse
 from accounts.tasks import send_verify_mail
+from base.authentications import CustomJWTAuthentication
 from base.test import TestCase
 from django.core.cache import cache
 
@@ -46,6 +48,13 @@ class TestUserCreate(TestCase):
     def test_authorize(self):
         self.client.fake()
         self.client.get("/users/")
+
+    def test_token(self):
+        self.client.login(self.user)
+        token = RefreshToken.for_user(self.user)
+        resp = CustomJWTAuthentication.append_token_claims(token, self.user)
+        self.client.get("/users/me/")
+        pass
 
 
 def find_email_key():

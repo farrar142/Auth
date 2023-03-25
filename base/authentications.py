@@ -78,10 +78,12 @@ class CustomJWTAuthentication(JWTAuthentication):
         # add payload here!!
         if user.is_staff or user.is_superuser:
             decode_jwt["role"].append("staff")
+        decode_jwt["username"] = user.username
+        decode_jwt["nickname"] = user.nickname
+        decode_jwt["profile_image_url"] = user.profile_image_url
 
         # encode
         encoded = jwt.encode(decode_jwt, secret_key, algorithm="HS256")
-
         return {
             "status": True,
             "refresh": str(refresh_token),
